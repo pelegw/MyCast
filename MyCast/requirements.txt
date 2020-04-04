@@ -10,3 +10,4 @@ Pillow==7.1.0
 Pint==0.11
 scipy==1.4.1
 siphon==0.8.0
+diskcache==4.1.0
