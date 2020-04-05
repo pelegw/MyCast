@@ -10,19 +10,18 @@ import metpy.calc as mpcalc
 from metpy.cbook import get_test_data
 from metpy.plots import Hodograph, SkewT
 from metpy.units import units
-#Create Date/Time and Location object
 import numpy as np
 import io
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from PIL import Image
 import logging
 import pylab
 from scipy.interpolate import interp1d
 from diskcache import Cache
+import timeit
 
 #Define a class for passing all calculation values
 class UpperAtmData:
-    def __init__(self, df, p, T, Td,alt,wind_speed,wind_dir,wet_bulb,field_pressure,lcl_pressure,lcl_temperature):
+    def __init__(self, df, p, T, Td,alt,wind_speed,wind_dir,wet_bulb,field_pressure,lcl_pressure,lcl_temperature,adiabat):
         self.df = df
         self.p = p
         self.T = T
@@ -34,6 +33,8 @@ class UpperAtmData:
         self.field_pressure = field_pressure
         self.lcl_pressure = lcl_pressure
         self.lcl_temperature = lcl_temperature
+        self.adiabat = adiabat
+
     def get_wind_components(self):
         u, v = mpcalc.wind_components(self.wind_speed, self.wind_dir)
 
@@ -47,17 +48,17 @@ def get_sounding(station):
 
     if df is not None:
         #Get sounding from cache and return it
-        logging.info("Cache Hit")
-        print("Cahce Hit")
+        logging.info("Sounding Cache Hit")
+        print("Sounding Cahce Hit")
         return df
     else:
 
         logging.info("Cache Miss")
         print("Cahce Miss")
-        today = datetime.today()
-        if today.hour<3:
+        today = datetime.utcnow()
+        if today.hour<1:
         #If date is not yet 02:00 make it yesterday... :)
-            today = datetime.now() - timedelta(days=1) 
+            today = datetime.utcnow() - timedelta(days=1) 
             print("Trying yesterday's sounding data",file=sys.stdout)
         if (today.hour > 13):
             hour = 12
@@ -68,7 +69,7 @@ def get_sounding(station):
             #date = datetime(2020, 3, 14, 0)
         
             df = WyomingUpperAir.request_data(date, station)
-            cache.set('sounding', df, expire=600,tag='Sounding Data ')
+            cache.set('sounding', df, expire=1800,tag='Sounding Data ')
 
             #TODO GET LATEST DATE WHEN AVAILABLE
         except Exception as e:
@@ -76,11 +77,11 @@ def get_sounding(station):
                 hour = 0
                 print("Unable to retriece 12Z data attempting 00Z data",file=sys.stderr)
                 try:
-                    date = datetime(today.year, today.month, 1, hour)
+                    date = datetime(today.year, today.month, today.day, hour)
                     station = '40179'
                     df = WyomingUpperAir.request_data(date, station)
                     #TODO GET LATEST DATE WHEN AVAILABLE
-                    cache.set('sounding', df, expire=600,tag='Sounding Data ')
+                    cache.set('sounding', df, expire=1800,tag='Sounding Data ')
                 except Exception as e:
                     print(e,file=sys.stderr)
                     sys.exit(-1)
@@ -99,6 +100,19 @@ def calculate_sounding_data(df,field_height,field_temp):
     # This will Return a dictionary with all the vallculate values. Keys are:                                #
     # "pressure", "temperature", "dewpoint", "height", "windspeed","wind_dir"                               
     ###################################### CALCULATION MAGIC #################################################
+    cache = Cache("./")
+    #Retrieves Sounding Details and returns them
+    
+    #If soundings are cached and valid, returns the cache, otherwise retreive new sounding
+    calc = cache.get('calculation')
+
+    if calc is not None:
+        logging.info("Calculation Cache Hit")
+        print("Calculation Cahce Hit")
+        return calc
+    
+    logging.info("Calculation Cache Miss")
+    print("Calculation Cahce Miss")
     p = df['pressure'].values * units.hPa
     T = df['temperature'].values * units.degC
     Td = df['dewpoint'].values * units.degC
@@ -107,7 +121,8 @@ def calculate_sounding_data(df,field_height,field_temp):
     wind_dir = df['direction'].values * units.degrees
     wet_bulb = mpcalc.wet_bulb_temperature(p,T,Td)
     field_pressure = mpcalc.height_to_pressure_std(field_height*units.ft)
-    
+    adiabat = mpcalc.dry_lapse(p,field_temp*units.degC,ref_pressure=mpcalc.height_to_pressure_std(field_height*units.ft))
+
     #Interpolate Missing Values using linear interpolation
     Td_linear = interp1d(alt.magnitude,Td.magnitude)
     T_linear = interp1d(alt.magnitude,T.magnitude)
@@ -115,7 +130,9 @@ def calculate_sounding_data(df,field_height,field_temp):
     #Calculate the LCL Based on Max Temperature
     lcl_pressure, lcl_temperature = mpcalc.lcl(field_pressure,field_temp*units.degC ,Td_linear(field_height)*units.degC)
     #parcel_prof = mpcalc.parcel_profile(p, T[0], Td[0]).to('degC')
-    return MeteoCast.UpperAtmData(df, p, T, Td,alt,wind_speed,wind_dir,wet_bulb,field_pressure,lcl_pressure,lcl_temperature)
+    calc = MeteoCast.UpperAtmData(df, p, T, Td,alt,wind_speed,wind_dir,wet_bulb,field_pressure,lcl_pressure,lcl_temperature,adiabat)
+    cache.set('calculation', calc, expire=600,tag='Calculation Data ')
+    return calc
 
 
 def get_tskew_plot(calc,field_height,field_temp,rot=0):
@@ -159,8 +176,7 @@ def get_tskew_plot(calc,field_height,field_temp,rot=0):
     skew.ax.set_ylabel(ylabel="Height",labelpad=50)
 
     #add dry adiabatic lapse rate line at the field height and max temperature 
-    adiabat = mpcalc.dry_lapse(calc.p,field_temp*units.degC,ref_pressure=mpcalc.height_to_pressure_std(field_height*units.ft))
-    skew.plot(calc.p,adiabat,'g',linewidth=1,linestyle='--')
+    skew.plot(calc.p,calc.adiabat,'g',linewidth=1,linestyle='--')
        #Add legend
     skew.ax.get_legend_handles_labels()
     skew.ax.legend()
@@ -171,6 +187,8 @@ def plot_to_png(plt):
     plt.savefig(output,format='png')
     output.seek(0)
     return output.getvalue()
+    
+
 
 
 
