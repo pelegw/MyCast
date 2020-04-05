@@ -25,10 +25,13 @@
     <Compile Include="MeteoCast.py">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="module1.py">
+    <Compile Include="ForecastTools.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="MyCast.py" />
+    <Compile Include="settings.py">
+      <SubType>Code</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Content Include="requirements.txt" />

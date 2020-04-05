@@ -4,13 +4,10 @@ from flask import Flask, render_template, Response
 from flask_caching import Cache
 import time
 from dotenv import load_dotenv
-import os
+import settings
 
 if __name__ == "__main__":
-    project_folder = os.path.expanduser('./')
-    print(project_folder)
-    load_dotenv(os.path.join(project_folder, '.env'))
-    print(os.getenv("OpenWeatherMapAPIKey"))
+    print(settings.SECRET_KEY)
     exit()
     start_time = time.time()
     logging.basicConfig(filename='mycast.log',level=logging.DEBUG)
