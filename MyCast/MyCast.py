@@ -5,14 +5,19 @@ from flask_caching import Cache
 import time
 from dotenv import load_dotenv
 import settings
+import ForecastTools
 
 if __name__ == "__main__":
-    print(settings.SECRET_KEY)
-    exit()
-    start_time = time.time()
     logging.basicConfig(filename='mycast.log',level=logging.DEBUG)
     logging.info("***Starting***")
     logging.info("PNG Export Request")
+    start_time = time.time()
+    print(ForecastTools.get_weather_by_location_coordinates(31.28,34.80))
+    print(ForecastTools.get_forecast_by_location_coordinates(31.28,34.80))
+
+    exit()
+    logging.basicConfig(filename='mycast.log',level=logging.DEBUG)
+    logging.info("***Starting MyCast***")
      #create a date object for today
     field_height = 650 #Field Height for Sde Teman Airfield
     field_temp = 31 #Field Max Temp in degC

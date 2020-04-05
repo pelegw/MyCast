@@ -40,11 +40,12 @@ class UpperAtmData:
 
 def get_sounding(station):
 ###################################### Collect Sounding ################################################
-    cache = Cache("./")
+    cache = settings.AppCache
     #Retrieves Sounding Details and returns them
     
     #If soundings are cached and valid, returns the cache, otherwise retreive new sounding
-    df = cache.get('sounding')
+    key='sounding_'+str(station)
+    df = cache.get(key)
 
     if df is not None:
         #Get sounding from cache and return it
@@ -69,7 +70,7 @@ def get_sounding(station):
             #date = datetime(2020, 3, 14, 0)
         
             df = WyomingUpperAir.request_data(date, station)
-            cache.set('sounding', df, expire=1800,tag='Sounding Data ')
+            cache.set(key, df, expire=1800,tag='Sounding Data ')
 
             #TODO GET LATEST DATE WHEN AVAILABLE
         except Exception as e:
@@ -81,7 +82,7 @@ def get_sounding(station):
                     station = '40179'
                     df = WyomingUpperAir.request_data(date, station)
                     #TODO GET LATEST DATE WHEN AVAILABLE
-                    cache.set('sounding', df, expire=1800,tag='Sounding Data ')
+                    cache.set(key, df, expire=1800,tag='Sounding Data ')
                 except Exception as e:
                     print(e,file=sys.stderr)
                     sys.exit(-1)
@@ -100,7 +101,7 @@ def calculate_sounding_data(df,field_height,field_temp):
     # This will Return a dictionary with all the vallculate values. Keys are:                                #
     # "pressure", "temperature", "dewpoint", "height", "windspeed","wind_dir"                               
     ###################################### CALCULATION MAGIC #################################################
-    cache = Cache("./")
+    cache = settings.AppCache
     #Retrieves Sounding Details and returns them
     
     #If soundings are cached and valid, returns the cache, otherwise retreive new sounding
