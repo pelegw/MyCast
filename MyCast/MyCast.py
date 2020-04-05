@@ -2,17 +2,8 @@ import MeteoCast
 import logging
 from flask import Flask, render_template, Response
 from flask_caching import Cache
-import time
-from dotenv import load_dotenv
-import os
 
 if __name__ == "__main__":
-    project_folder = os.path.expanduser('./')
-    print(project_folder)
-    load_dotenv(os.path.join(project_folder, '.env'))
-    print(os.getenv("OpenWeatherMapAPIKey"))
-    exit()
-    start_time = time.time()
     logging.basicConfig(filename='mycast.log',level=logging.DEBUG)
     logging.info("***Starting***")
     logging.info("PNG Export Request")
@@ -23,6 +14,4 @@ if __name__ == "__main__":
     df = MeteoCast.get_sounding(station)
     cal = MeteoCast.calculate_sounding_data(df,field_height,field_temp)
     plt = MeteoCast.get_tskew_plot(cal,field_height,field_temp)
-    print("--- %s seconds ---" % (time.time() - start_time))
     plt.show()
-    

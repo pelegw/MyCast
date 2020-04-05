@@ -25,9 +25,6 @@
     <Compile Include="MeteoCast.py">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="module1.py">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="MyCast.py" />
   </ItemGroup>
   <ItemGroup>
