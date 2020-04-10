@@ -15,6 +15,7 @@ env/
 .env
 cache.db
 cache/
+.venv/
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -344,6 +345,6 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
-/MyCast/data/cache.db-shm
-/MyCast/data/cache.db-wal
-/MyCast/data/MyCast.sqlite
+/data/cache.db-shm
+/data/cache.db-wal
+/data/MyCast.sqlite
