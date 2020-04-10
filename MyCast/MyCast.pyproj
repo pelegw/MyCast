@@ -28,6 +28,9 @@
     <Compile Include="ForecastTools.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="GeoTools.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="MyCast.py" />
     <Compile Include="settings.py">
       <SubType>Code</SubType>

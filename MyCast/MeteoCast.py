@@ -18,10 +18,11 @@ import pylab
 from scipy.interpolate import interp1d
 from diskcache import Cache
 import timeit
+import settings
 
 #Define a class for passing all calculation values
 class UpperAtmData:
-    def __init__(self, df, p, T, Td,alt,wind_speed,wind_dir,wet_bulb,field_pressure,lcl_pressure,lcl_temperature,adiabat):
+    def __init__(self, df, p, T, Td,alt,wind_speed,wind_dir,wet_bulb,field_pressure,lcl_pressure,lcl_temperature,adiabat_line):
         self.df = df
         self.p = p
         self.T = T
@@ -33,7 +34,7 @@ class UpperAtmData:
         self.field_pressure = field_pressure
         self.lcl_pressure = lcl_pressure
         self.lcl_temperature = lcl_temperature
-        self.adiabat = adiabat
+        self.adiabat_line = adiabat_line
 
     def get_wind_components(self):
         u, v = mpcalc.wind_components(self.wind_speed, self.wind_dir)
@@ -67,8 +68,6 @@ def get_sounding(station):
             hour = 0
         try:
             date = datetime(today.year, today.month, today.day, hour)
-            #date = datetime(2020, 3, 14, 0)
-        
             df = WyomingUpperAir.request_data(date, station)
             cache.set(key, df, expire=1800,tag='Sounding Data ')
 
@@ -103,9 +102,9 @@ def calculate_sounding_data(df,field_height,field_temp):
     ###################################### CALCULATION MAGIC #################################################
     cache = settings.AppCache
     #Retrieves Sounding Details and returns them
-    
+    key='calculation'+str(field_height)+'_'+str(field_temp)
     #If soundings are cached and valid, returns the cache, otherwise retreive new sounding
-    calc = cache.get('calculation')
+    calc = cache.get(key)
 
     if calc is not None:
         logging.info("Calculation Cache Hit")
@@ -122,8 +121,8 @@ def calculate_sounding_data(df,field_height,field_temp):
     wind_dir = df['direction'].values * units.degrees
     wet_bulb = mpcalc.wet_bulb_temperature(p,T,Td)
     field_pressure = mpcalc.height_to_pressure_std(field_height*units.ft)
-    adiabat = mpcalc.dry_lapse(p,field_temp*units.degC,ref_pressure=mpcalc.height_to_pressure_std(field_height*units.ft))
-
+    adiabat_line = mpcalc.dry_lapse(p,field_temp*units.degC,ref_pressure=mpcalc.height_to_pressure_std(field_height*units.ft))
+    
     #Interpolate Missing Values using linear interpolation
     Td_linear = interp1d(alt.magnitude,Td.magnitude)
     T_linear = interp1d(alt.magnitude,T.magnitude)
@@ -131,8 +130,8 @@ def calculate_sounding_data(df,field_height,field_temp):
     #Calculate the LCL Based on Max Temperature
     lcl_pressure, lcl_temperature = mpcalc.lcl(field_pressure,field_temp*units.degC ,Td_linear(field_height)*units.degC)
     #parcel_prof = mpcalc.parcel_profile(p, T[0], Td[0]).to('degC')
-    calc = MeteoCast.UpperAtmData(df, p, T, Td,alt,wind_speed,wind_dir,wet_bulb,field_pressure,lcl_pressure,lcl_temperature,adiabat)
-    cache.set('calculation', calc, expire=600,tag='Calculation Data ')
+    calc = MeteoCast.UpperAtmData(df, p, T, Td,alt,wind_speed,wind_dir,wet_bulb,field_pressure,lcl_pressure,lcl_temperature,adiabat_line)
+    cache.set(key, calc, expire=600,tag='Calculation Data ')
     return calc
 
 
@@ -175,9 +174,10 @@ def get_tskew_plot(calc,field_height,field_temp,rot=0):
     skew.ax.axhline(y=mpcalc.height_to_pressure_std(field_height*units.ft),linewidth=2,label='Field Height',color='black')
     #Relabel Y
     skew.ax.set_ylabel(ylabel="Height",labelpad=50)
-
+    print(calc.adiabat_line)
+    print(calc.lcl_pressure)
     #add dry adiabatic lapse rate line at the field height and max temperature 
-    skew.plot(calc.p,calc.adiabat,'g',linewidth=1,linestyle='--')
+    skew.plot(calc.p,calc.adiabat_line.to(units.degC),'g',linewidth=2,linestyle='--',label='ADLR from Field Max Temp')
        #Add legend
     skew.ax.get_legend_handles_labels()
     skew.ax.legend()

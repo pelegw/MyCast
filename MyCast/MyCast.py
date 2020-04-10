@@ -6,23 +6,88 @@ import time
 from dotenv import load_dotenv
 import settings
 import ForecastTools
+import sqlalchemy as db
+import csv
+import pandas as pd
+import GeoTools
 
 if __name__ == "__main__":
-    logging.basicConfig(filename='mycast.log',level=logging.DEBUG)
-    logging.info("***Starting***")
-    logging.info("PNG Export Request")
+    FieldName = 'LLBS'
     start_time = time.time()
-    print(ForecastTools.get_weather_by_location_coordinates(31.28,34.80))
-    print(ForecastTools.get_forecast_by_location_coordinates(31.28,34.80))
-
-    exit()
     logging.basicConfig(filename='mycast.log',level=logging.DEBUG)
     logging.info("***Starting MyCast***")
-     #create a date object for today
-    field_height = 650 #Field Height for Sde Teman Airfield
+    engine = db.create_engine(settings.DB_STRING)
+    connection = engine.connect()
+    if not engine.dialect.has_table(engine, 'Airports'):  # If table don't exist, Create.
+        print("Creating Airports Table")
+        metadata = db.MetaData()
+        # Create a table with the appropriate Columns
+        airports = db.Table('Airports', metadata,
+              db.Column('ICAO', db.String(255), primary_key=True, nullable=False), 
+              db.Column('Name', db.String(255)), db.Column('City', db.String(255)),
+              db.Column('Country', db.String(255)), db.Column('IATA', db.String(255)),
+              db.Column('Latitude', db.String(10)),db.Column('Longtitude', db.String(10)),
+              db.Column('Elevation', db.String(255)),db.Column('TZDB', db.String(255)))
+
+        # Implement the creation
+        metadata.create_all(engine)
+        #now populate table
+        with open(settings.AirportsFile, newline='',encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                print(row)
+                query = db.insert(airports).values(ICAO=row['ICAO'],Name=row['Name'],City=row['City'],Country=row['Country'],Latitude=row['Latitude'],Longtitude=row['Longtitude'],Elevation=row['Elevation'],TZDB=row['TZ Database time']) 
+                ResultProxy = connection.execute(query)
+    if not engine.dialect.has_table(engine, 'Stations'):  # If table don't exist, Create.
+        print("Creating Stations Table")
+        metadata = db.MetaData()
+        # Create a table with the appropriate Columns
+        stations = db.Table('Stations', metadata,
+              db.Column('StationNumber', db.String(255), primary_key=True, nullable=False), 
+              db.Column('Name', db.String(255)), db.Column('Latitude', db.String(255)),
+              db.Column('Longtitude', db.String(255)))
+
+        # Implement the creation
+        metadata.create_all(engine)
+        #now populate table
+        with open(settings.SoundStationsFile, newline='',encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                print(row)
+                query = db.insert(stations).values(StationNumber=row['Station Number'],Name=row['Name'],Latitude=row['Lat'],Longtitude=row['Lon'])
+                ResultProxy = connection.execute(query)
+    
+    metadata = db.MetaData()
+    fields = db.Table('Airports',metadata, autoload=True, autoload_with=engine)
+    query = db.select([fields]).where(fields.columns.ICAO == FieldName)
+    ResultProxy = connection.execute(query)
+    ResultSet = ResultProxy.fetchall()
+    if len(ResultSet)<1:
+        print("No Results Found For Field")
+        exit()
+       #Should be only one result
+    field_height = int(ResultSet[0].Elevation)
+    field_lat = float(ResultSet[0].Latitude)
+    field_lon = float(ResultSet[0].Longtitude)
+    print(field_height,field_lat,field_lon)
+    #Now we can get the closest sounding station
+    #this is a bit crude, but we iterate over each station and find the shortest distance naively.
+    stations = db.Table('Stations',metadata, autoload=True, autoload_with=engine)
+    query = db.select([stations])
+    ResultProxy = connection.execute(query)
+    ResultSet = ResultProxy.fetchall()
+    min_distance = 20000
+    for station in ResultSet:
+        station_lat = float(station.Latitude)
+        station_lon = float(station.Longtitude)
+        distance = GeoTools.get_distance(field_lat,field_lon,station_lat,station_lon)
+        if distance < min_distance:
+            min_distance = distance
+            min_station = station
+    print(min_station.StationNumber)   
     field_temp = 31 #Field Max Temp in degC
-    station = '40179' #Field Height
-    df = MeteoCast.get_sounding(station)
+    station_num = min_station.StationNumber #Field Height
+    df = MeteoCast.get_sounding(station_num)
     cal = MeteoCast.calculate_sounding_data(df,field_height,field_temp)
     plt = MeteoCast.get_tskew_plot(cal,field_height,field_temp)
     print("--- %s seconds ---" % (time.time() - start_time))
