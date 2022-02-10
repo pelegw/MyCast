@@ -1,4 +1,4 @@
-import MeteoCast
+from datetime import datetime, date, timedelta
 import logging
 from flask import Flask, render_template, Response
 from flask_caching import Cache
@@ -10,6 +10,8 @@ import sqlalchemy as db
 import csv
 import pandas as pd
 import GeoTools
+import MeteoCast
+import os
 
 if __name__ == "__main__":
     FieldName = 'LLBS'
@@ -18,7 +20,7 @@ if __name__ == "__main__":
     logging.info("***Starting MyCast***")
     engine = db.create_engine(settings.DB_STRING)
     connection = engine.connect()
-    if not engine.dialect.has_table(engine, 'Airports'):  # If table don't exist, Create.
+    if not engine.dialect.has_table(connection, 'Airports'):  # If table don't exist, Create.
         print("Creating Airports Table")
         metadata = db.MetaData()
         # Create a table with the appropriate Columns
@@ -35,10 +37,9 @@ if __name__ == "__main__":
         with open(settings.AirportsFile, newline='',encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                print(row)
                 query = db.insert(airports).values(ICAO=row['ICAO'],Name=row['Name'],City=row['City'],Country=row['Country'],Latitude=row['Latitude'],Longtitude=row['Longtitude'],Elevation=row['Elevation'],TZDB=row['TZ Database time']) 
                 ResultProxy = connection.execute(query)
-    if not engine.dialect.has_table(engine, 'Stations'):  # If table don't exist, Create.
+    if not engine.dialect.has_table(connection, 'Stations'):  # If table don't exist, Create.
         print("Creating Stations Table")
         metadata = db.MetaData()
         # Create a table with the appropriate Columns
@@ -53,7 +54,6 @@ if __name__ == "__main__":
         with open(settings.SoundStationsFile, newline='',encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                print(row)
                 query = db.insert(stations).values(StationNumber=row['Station Number'],Name=row['Name'],Latitude=row['Lat'],Longtitude=row['Lon'])
                 ResultProxy = connection.execute(query)
     
@@ -69,7 +69,6 @@ if __name__ == "__main__":
     field_height = int(ResultSet[0].Elevation)
     field_lat = float(ResultSet[0].Latitude)
     field_lon = float(ResultSet[0].Longtitude)
-    print(field_height,field_lat,field_lon)
     #Now we can get the closest sounding station
     #this is a bit crude, but we iterate over each station and find the shortest distance naively.
     stations = db.Table('Stations',metadata, autoload=True, autoload_with=engine)
@@ -84,12 +83,14 @@ if __name__ == "__main__":
         if distance < min_distance:
             min_distance = distance
             min_station = station
-    print(min_station.StationNumber)   
-    field_temp = 31 #Field Max Temp in degC
-    station_num = min_station.StationNumber #Field Height
-    df = MeteoCast.get_sounding(station_num)
-    cal = MeteoCast.calculate_sounding_data(df,field_height,field_temp)
-    plt = MeteoCast.get_tskew_plot(cal,field_height,field_temp)
+    station_num = min_station.StationNumber #Field Height 
+    #df = MeteoCast.get_sounding(station_num)
+    wtime = datetime.utcnow()+timedelta(hours = 12)
+    df = MeteoCast.get_forecast(wtime)
+    ztemp = ForecastTools.get_temp_by_location_coordinates(field_lat,field_lon,wtime)
+    cal = MeteoCast.calculate_sounding_data(df,field_height,ztemp)
+    #plt = MeteoCast.get_tskew_plot(cal,field_height,ztemp)
+    plt=MeteoCast.report(cal,wtime,field_height,ztemp)
     print("--- %s seconds ---" % (time.time() - start_time))
     plt.show()
     
